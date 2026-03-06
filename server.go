@@ -46,6 +46,7 @@ type Connection interface {
 type Server struct {
 	Store
 	ServerOpts
+	actualAddr string // Stores the actual listening address (useful when using :0)
 }
 
 type ServerOpts struct {
@@ -88,8 +89,9 @@ func (s *Server) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	s.actualAddr = listener.Addr().String()
 	go s.Store.Run(ctx)
-	slog.Info("server listening on", "addr", s.ListenAddr)
+	slog.Info("server listening on", "addr", s.actualAddr)
 	return s.acceptLoop(ctx, listener)
 }
 
@@ -143,7 +145,7 @@ func (s *Server) handleConnection(ctx context.Context, conn Connection) {
 	peer.writeLoop(newCtx)
 }
 
-// handleControl processes control frames such as auth, ping, and closing.
+// processControlMessage processes control frames such as auth, ping, and closing.
 func handleControl(peer Peer, req frame.Frame) error {
 	var payload []byte
 	switch req.Op {
@@ -156,6 +158,14 @@ func handleControl(peer Peer, req frame.Frame) error {
 		return nil
 	}
 	return peer.Respond(payload)
+}
+
+// GetAddr returns the actual listening address of the server.
+func (s *Server) GetAddr() string {
+	if s.actualAddr != "" {
+		return s.actualAddr
+	}
+	return s.ListenAddr
 }
 
 // ReadTimeout returns the read timeout for the server.

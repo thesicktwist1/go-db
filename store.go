@@ -59,7 +59,7 @@ loop:
 		select {
 		case tx := <-s.txCh:
 			slog.Info("processing transaction", "pid", tx.pid)
-			val, err := s.processTask(tx)
+			val, err := s.executeTransaction(tx)
 			if err != nil {
 				resp.Write(frame.Error(tx.Id, err))
 				slog.Error("transaction processing", "err", err, "pid", tx.pid)
@@ -81,17 +81,17 @@ loop:
 	}
 }
 
-// processTask processes a single transaction and returns the result.
-func (s *store) processTask(tx transaction) ([]byte, error) {
+// executeTransaction processes a single transaction and returns the result.
+func (s *store) executeTransaction(tx transaction) ([]byte, error) {
 	var (
-		val    []byte
+		value  []byte
 		exists bool
 	)
 	payload := tx.Buffer
 	switch tx.Op {
 	case frame.OpGet:
 		key := payload.String()
-		val, exists = s.mem[key]
+		value, exists = s.mem[key]
 		if !exists {
 			return nil, ErrNotExists
 		}
@@ -106,15 +106,15 @@ func (s *store) processTask(tx transaction) ([]byte, error) {
 		delete(s.mem, payload.String())
 	case frame.OpSet:
 		key := tx.Buffer.String()[:tx.KeyLen]
-		newVal := tx.Buffer.Bytes()[tx.KeyLen:]
+		newValue := tx.Buffer.Bytes()[tx.KeyLen:]
 		if err := s.log.Append(tx.Buffer.Bytes(), tx.KeyLen); err != nil {
 			return nil, err
 		}
-		s.mem[key] = newVal
+		s.mem[key] = newValue
 	default:
 		return nil, frame.ErrMalformed
 	}
-	return val, nil
+	return value, nil
 }
 
 // NewStore creates a new store from the given database file.

@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_processTask(t *testing.T) {
+func Test_executeTransaction(t *testing.T) {
 	tempDir := t.TempDir()
 	err := os.Chdir(tempDir)
 	require.NoError(t, err)
@@ -87,7 +87,7 @@ func Test_processTask(t *testing.T) {
 		},
 	}
 	for _, tc := range tests {
-		got, err := store.processTask(tc.transaction)
+		got, err := store.executeTransaction(tc.transaction)
 		if tc.wantErr {
 			require.Errorf(t, err, tc.name)
 			require.ErrorIsf(t, err, tc.errType, tc.name)

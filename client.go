@@ -71,7 +71,7 @@ func NewClient(address string) (*Client, error) {
 func (c *Client) Get(ctx context.Context, key string) ([]byte, error) {
 	id := rand.Uint32()
 	request := frame.Query(frame.OpGet, id, key, nil)
-	respCh, err := c.newRequestCh(id, request)
+	respCh, err := c.newRequestChannel(id, request)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +87,7 @@ func (c *Client) Get(ctx context.Context, key string) ([]byte, error) {
 func (c *Client) Set(ctx context.Context, key string, val []byte) error {
 	id := rand.Uint32()
 	request := frame.Query(frame.OpSet, id, key, val)
-	respCh, err := c.newRequestCh(id, request)
+	respCh, err := c.newRequestChannel(id, request)
 	if err != nil {
 		return err
 	}
@@ -103,7 +103,7 @@ func (c *Client) Set(ctx context.Context, key string, val []byte) error {
 func (c *Client) Delete(ctx context.Context, key string) error {
 	id := rand.Uint32()
 	request := frame.Query(frame.OpDel, id, key, nil)
-	respCh, err := c.newRequestCh(id, request)
+	respCh, err := c.newRequestChannel(id, request)
 	if err != nil {
 		return err
 	}
@@ -115,8 +115,8 @@ func (c *Client) Delete(ctx context.Context, key string) error {
 	}
 }
 
-// newRequestCh creates a new response channel for a request and sends it.
-func (c *Client) newRequestCh(id uint32, r []byte) (chan response, error) {
+// newRequestChannel creates a new response channel for a request and sends it.
+func (c *Client) newRequestChannel(id uint32, request []byte) (chan response, error) {
 	c.Lock()
 	defer c.Unlock()
 	_, exist := c.resps[id]
@@ -126,7 +126,7 @@ func (c *Client) newRequestCh(id uint32, r []byte) (chan response, error) {
 	respCh := make(chan response, 1)
 	c.resps[id] = respCh
 	select {
-	case c.reqCh <- r:
+	case c.reqCh <- request:
 	default:
 		delete(c.resps, id)
 		close(respCh)
@@ -203,8 +203,8 @@ loop:
 	}
 }
 
-// send sends a response to the corresponding request channel.
-func (c *Client) send(id uint32, resp response) {
+// sendResponse sends a response to the corresponding request channel.
+func (c *Client) sendResponse(id uint32, resp response) {
 	c.RLock()
 	defer c.RUnlock()
 	ch, exist := c.resps[id]
@@ -229,10 +229,10 @@ func (c *Client) handleResponse(f frame.Frame) {
 	switch f.Type {
 	case frame.TypePayload:
 		resp.val = f.Buffer.Bytes()
-		c.send(f.Id, resp)
+		c.sendResponse(f.Id, resp)
 	case frame.TypeError:
 		resp.err = errors.New(f.Buffer.String())
-		c.send(f.Id, resp)
+		c.sendResponse(f.Id, resp)
 	case frame.TypeControl:
 		c.handleControl(f)
 	}

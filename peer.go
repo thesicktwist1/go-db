@@ -17,18 +17,18 @@ type Peer interface {
 }
 
 type peer struct {
-	conn    Connection
-	respsCh chan []byte
-	cancel  context.CancelFunc
+	conn            Connection
+	responseChannel chan []byte
+	cancel          context.CancelFunc
 	Processer
 }
 
 // NewPeer creates a new peer with the given processer and connection.
 func NewPeer(p Processer, conn Connection) *peer {
 	return &peer{
-		conn:      conn,
-		respsCh:   make(chan []byte, 32),
-		Processer: p,
+		conn:            conn,
+		responseChannel: make(chan []byte, 32),
+		Processer:       p,
 	}
 }
 
@@ -75,7 +75,7 @@ loop:
 	for {
 		p.conn.SetWriteDeadline(time.Now().Add(p.WriteTimeout()))
 		select {
-		case resp := <-p.respsCh:
+		case resp := <-p.responseChannel:
 			_, err := p.conn.Write(resp)
 			if err != nil {
 				slog.Error("write", "err", err, "peer", p.RemoteAddr())
@@ -90,7 +90,7 @@ loop:
 // Respond sends a response message to the peer.
 func (p *peer) Respond(b []byte) error {
 	select {
-	case p.respsCh <- b:
+	case p.responseChannel <- b:
 		slog.Info("message sent to", "peer", p.RemoteAddr())
 		return nil
 	default:
