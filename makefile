@@ -1,4 +1,4 @@
-.PHONY: test run build clean fmt help
+.PHONY: test run build clean fmt staticcheck help
 
 # Build the binary
 build:
@@ -16,6 +16,14 @@ test:
 fmt:
 	go fmt ./...
 
+# Run staticcheck
+staticcheck:
+	@if ! command -v staticcheck >/dev/null 2>&1; then \
+		echo "Installing staticcheck..."; \
+		go install honnef.co/go/tools/cmd/staticcheck@latest; \
+	fi
+	$$(go env GOPATH)/bin/staticcheck ./...
+
 # Clean build artifacts
 clean:
 	go clean
@@ -23,11 +31,12 @@ clean:
 
 # Show help
 help:
-	@echo "Available targets:"
-	@echo "  build     - Build the binary"
-	@echo "  run       - Run the application"
-	@echo "  test      - Run tests"
-	@echo "  fmt       - Format code"
-	@echo "  clean     - Clean build artifacts"
-	@echo "  help      - Show this help message"
+	@echo "Available:"
+	@echo "  build       - Build the binary"
+	@echo "  run         - Run the application"
+	@echo "  test        - Run tests"
+	@echo "  fmt         - Format code"
+	@echo "  staticcheck - Run staticcheck linter"
+	@echo "  clean       - Clean build artifacts"
+	@echo "  help        - Show this help message"
 

@@ -36,18 +36,35 @@ type Client struct {
 type ClientOpts struct {
 	ReadTimeout  time.Duration
 	WriteTimeout time.Duration
+	BufferSize   int // Size of read/write buffers (bytes)
+	ChannelSize  int // Size of request/response channels
 }
 
 // DefaultClientOpts returns the default client options.
 func DefaultClientOpts() ClientOpts {
 	return ClientOpts{
-		ReadTimeout:  time.Minute,
-		WriteTimeout: time.Minute,
+		ReadTimeout:  defaultClientReadTimeout,
+		WriteTimeout: defaultClientWriteTimeout,
+		BufferSize:   defaultClientBufferSize,
+		ChannelSize:  defaultClientChannelSize,
 	}
 }
 
-// NewClient creates and starts a new client connected to the given address.
-func NewClient(address string) (*Client, error) {
+// NewClient creates and starts a new client connected to the given address with the given options.
+func NewClient(address string, opts ClientOpts) (*Client, error) {
+	// Use defaults if timeouts are not set
+	if opts.ReadTimeout == 0 {
+		opts.ReadTimeout = defaultClientReadTimeout
+	}
+	if opts.WriteTimeout == 0 {
+		opts.WriteTimeout = defaultClientWriteTimeout
+	}
+	if opts.BufferSize <= 0 {
+		opts.BufferSize = defaultClientBufferSize
+	}
+	if opts.ChannelSize <= 0 {
+		opts.ChannelSize = defaultClientChannelSize
+	}
 	conn, err := net.Dial("tcp", address)
 	if err != nil {
 		return nil, err
@@ -59,9 +76,9 @@ func NewClient(address string) (*Client, error) {
 	client := &Client{
 		conn:       conn,
 		resps:      make(map[uint32]chan response),
-		reqCh:      make(chan []byte, 32),
+		reqCh:      make(chan []byte, opts.ChannelSize),
 		cancel:     cancel,
-		ClientOpts: DefaultClientOpts(),
+		ClientOpts: opts,
 	}
 	go client.start(ctx)
 	return client, nil
@@ -121,7 +138,7 @@ func (c *Client) newRequestChannel(id uint32, request []byte) (chan response, er
 	defer c.Unlock()
 	_, exist := c.resps[id]
 	if exist {
-		return nil, fmt.Errorf("request id [%d] already exist.", id)
+		return nil, fmt.Errorf("request id [%d] already exist", id)
 	}
 	respCh := make(chan response, 1)
 	c.resps[id] = respCh
@@ -149,7 +166,7 @@ func (c *Client) start(ctx context.Context) {
 
 // readLoop continuously reads responses from the server.
 func (c *Client) readLoop(ctx context.Context) {
-	buf := make([]byte, 1024)
+	buf := make([]byte, c.BufferSize)
 	bufLen := 0
 	parser := frame.NewParser()
 outer:
@@ -179,7 +196,7 @@ outer:
 
 // writeLoop continuously writes requests to the server and sends periodic pings.
 func (c *Client) writeLoop(ctx context.Context) {
-	pingTicker := time.NewTicker(time.Second * 30)
+	pingTicker := time.NewTicker(clientPingInterval)
 	defer pingTicker.Stop()
 loop:
 	for {

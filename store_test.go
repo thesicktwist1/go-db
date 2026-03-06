@@ -14,7 +14,7 @@ func Test_executeTransaction(t *testing.T) {
 	err := os.Chdir(tempDir)
 	require.NoError(t, err)
 
-	store, err := NewStore("test.db")
+	store, err := NewStore(testDBFile)
 	require.NoError(t, err)
 	store.mem["key"] = []byte("example")
 	store.mem["example"] = []byte("key")

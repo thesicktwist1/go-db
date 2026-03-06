@@ -9,6 +9,11 @@ import (
 var (
 	ErrMalformed         = errors.New("error malformed request")
 	ErrInvalidPayloadLen = errors.New("error invalid payload length")
+	ErrFrameTooLarge     = errors.New("frame exceeds maximum allowed size")
+	ErrInvalidFrameType  = errors.New("invalid frame type")
+	ErrInvalidOperation  = errors.New("invalid operation")
+	ErrKeyTooLarge       = errors.New("key size exceeds maximum allowed size")
+	ErrValueTooLarge     = errors.New("value size exceeds maximum allowed size")
 )
 
 var (
@@ -18,6 +23,14 @@ var (
 )
 
 const headerSize = 4
+
+// Frame size limits for security and performance
+const (
+	maxFrameSize   = 1024 * 1024 * 10 // 10MB max frame size
+	maxKeySize     = 1024 * 64        // 64KB max key size
+	maxValueSize   = 1024 * 1024 * 10 // 10MB max value size
+	maxPayloadSize = maxKeySize + maxValueSize
+)
 
 type Type uint8
 type ParserState uint8
@@ -70,6 +83,7 @@ func NewParser() *Parser {
 }
 
 func (p *Parser) Parse(buf []byte) (int, error) {
+	// Validate input buffer
 	readN := 0
 outerLoop:
 	for {
@@ -79,7 +93,11 @@ outerLoop:
 		current := buf[readN:]
 		switch p.State {
 		case StateInit:
-			p.Type = Type(current[0])
+			frameType := Type(current[0])
+			if frameType < TypeDefault || frameType > TypeError {
+				return 0, ErrInvalidFrameType
+			}
+			p.Type = frameType
 			readN++
 			switch p.Type {
 			case TypeError, TypePayload:
@@ -88,7 +106,11 @@ outerLoop:
 				p.State = StateOpParsing
 			}
 		case StateOpParsing:
-			p.Op = Op(current[0])
+			op := Op(current[0])
+			if op > OpClosing {
+				return 0, ErrInvalidOperation
+			}
+			p.Op = op
 			readN++
 			switch p.Op {
 			case OpDel, OpGet, OpSet:
@@ -115,6 +137,9 @@ outerLoop:
 				return -1, nil
 			}
 			KeyLen := binary.LittleEndian.Uint32(current[:headerSize])
+			if KeyLen > maxKeySize {
+				return 0, ErrKeyTooLarge
+			}
 			p.KeyLen = int(KeyLen)
 			readN += headerSize
 			p.State = StatePayloadLenParsing

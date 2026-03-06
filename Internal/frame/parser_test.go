@@ -213,3 +213,29 @@ func Test_NewError(t *testing.T) {
 	got := Error(10, errors.New("error"))
 	require.Equal(t, expected, got)
 }
+
+func Test_FrameSizeValidation(t *testing.T) {
+	parser := NewParser()
+
+	// Test oversized frame
+	oversizedFrame := make([]byte, maxFrameSize+1)
+	_, err := parser.Parse(oversizedFrame)
+	require.Error(t, err)
+	require.Equal(t, ErrFrameTooLarge, err)
+
+	parser.Reset()
+
+	// Test invalid frame type
+	invalidTypeFrame := []byte{255} // Invalid type
+	_, err = parser.Parse(invalidTypeFrame)
+	require.Error(t, err)
+	require.Equal(t, ErrInvalidFrameType, err)
+
+	parser.Reset()
+
+	// Test invalid operation
+	invalidOpFrame := []byte{2, 255} // Valid type, invalid op
+	_, err = parser.Parse(invalidOpFrame)
+	require.Error(t, err)
+	require.Equal(t, ErrInvalidOperation, err)
+}

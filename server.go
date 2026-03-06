@@ -16,22 +16,18 @@ var (
 	ErrServerClosed     = errors.New("server closed")
 )
 
-const (
-	defaultAddr         = ":4040"
-	defaultReadTimeout  = time.Second * 30
-	defaultWriteTimeout = time.Second * 30
-)
-
-// Processer interface defines the contract for processing frames from peers.
-type Processer interface {
+// Processor interface defines the contract for processing frames from peers.
+type Processor interface {
 	Process(Peer, frame.Frame)
 	Options
 }
 
-// Options interface defines timeouts for read and write operations.
+// Options interface defines timeouts and buffer configurations for operations.
 type Options interface {
 	ReadTimeout() time.Duration
 	WriteTimeout() time.Duration
+	BufferSize() int
+	ChannelSize() int
 }
 
 // Connection interface defines the contract for network connections.
@@ -46,40 +42,56 @@ type Connection interface {
 type Server struct {
 	Store
 	ServerOpts
-	actualAddr string // Stores the actual listening address (useful when using :0)
+	shutdown chan struct{} // Signals graceful shutdown
+	listener net.Listener  // Active listener for cleanup
 }
 
 type ServerOpts struct {
-	ListenAddr   string
-	readTimeout  time.Duration
-	writeTimeout time.Duration
+	ListenAddr   string        // Address to listen on
+	readTimeout  time.Duration // Timeout for read operations
+	writeTimeout time.Duration // Timeout for write operations
+	bufferSize   int           // Size of request/response buffers (bytes)
+	channelSize  int           // Size of async operation channels
 }
 
 // NewConfig creates a new server configuration with the given listen address.
 func NewConfig(listenAddr string) ServerOpts {
 	return ServerOpts{
-		ListenAddr: listenAddr,
+		ListenAddr:   listenAddr,
+		readTimeout:  defaultReadTimeout,
+		writeTimeout: defaultWriteTimeout,
+		bufferSize:   defaultBufferSize,
+		channelSize:  defaultChannelSize,
 	}
 }
 
-// defaultOpts returns the default server options.
-func defaultOpts() ServerOpts {
+// DefaultServerOpts returns the default server options.
+func DefaultServerOpts() ServerOpts {
 	return ServerOpts{
-		ListenAddr:   defaultAddr,
+		ListenAddr:   defaultServerAddr,
 		readTimeout:  defaultReadTimeout,
 		writeTimeout: defaultWriteTimeout,
+		bufferSize:   defaultBufferSize,
+		channelSize:  defaultChannelSize,
 	}
 }
 
 // NewServer creates a new server with the given database file and options.
-func NewServer(fileName string, ServerOpts ServerOpts) (*Server, error) {
+func NewServer(fileName string, opts ServerOpts) (*Server, error) {
+	if opts.bufferSize <= 0 {
+		opts.bufferSize = defaultBufferSize
+	}
+	if opts.channelSize <= 0 {
+		opts.channelSize = defaultChannelSize
+	}
 	store, err := NewStore(fileName)
 	if err != nil {
 		return nil, err
 	}
 	return &Server{
 		Store:      store,
-		ServerOpts: ServerOpts,
+		ServerOpts: opts,
+		shutdown:   make(chan struct{}),
 	}, nil
 }
 
@@ -89,19 +101,32 @@ func (s *Server) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	s.actualAddr = listener.Addr().String()
+	s.listener = listener
 	go s.Store.Run(ctx)
-	slog.Info("server listening on", "addr", s.actualAddr)
+	slog.Info("server listening on", "addr", listener.Addr().String())
 	return s.acceptLoop(ctx, listener)
 }
 
 // acceptLoop accepts incoming connections and spawns handlers for them.
 func (s *Server) acceptLoop(ctx context.Context, listener net.Listener) error {
 	for {
+		select {
+		case <-s.shutdown:
+			slog.Info("server shutting down, stopping accepting connections")
+			return listener.Close()
+		default:
+		}
+
 		conn, err := listener.Accept()
 		if err != nil {
-			slog.Error("listener", "err", err)
-			continue
+			// Check if this is due to shutdown
+			select {
+			case <-s.shutdown:
+				return nil
+			default:
+				slog.Error("listener", "err", err)
+				continue
+			}
 		}
 		go s.handleConnection(ctx, conn)
 	}
@@ -160,14 +185,6 @@ func handleControl(peer Peer, req frame.Frame) error {
 	return peer.Respond(payload)
 }
 
-// GetAddr returns the actual listening address of the server.
-func (s *Server) GetAddr() string {
-	if s.actualAddr != "" {
-		return s.actualAddr
-	}
-	return s.ListenAddr
-}
-
 // ReadTimeout returns the read timeout for the server.
 func (s *Server) ReadTimeout() time.Duration {
 	return s.readTimeout
@@ -176,4 +193,22 @@ func (s *Server) ReadTimeout() time.Duration {
 // WriteTimeout returns the write timeout for the server.
 func (s *Server) WriteTimeout() time.Duration {
 	return s.writeTimeout
+}
+
+// BufferSize returns the buffer size for the server.
+func (s *Server) BufferSize() int {
+	return s.bufferSize
+}
+
+// ChannelSize returns the channel size for the server.
+func (s *Server) ChannelSize() int {
+	return s.channelSize
+}
+func (s *Server) Shutdown() error {
+	slog.Info("initiating graceful shutdown")
+	close(s.shutdown)
+	if s.listener != nil {
+		return s.listener.Close()
+	}
+	return nil
 }

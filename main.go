@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 )
 
 func main() {
@@ -17,11 +16,7 @@ func main() {
 	)
 	defer cancel()
 
-	serv, err := NewServer("new.db", ServerOpts{
-		ListenAddr:   ":4040",
-		readTimeout:  time.Minute,
-		writeTimeout: time.Minute,
-	})
+	serv, err := NewServer(defaultDBFile, DefaultServerOpts())
 	if err != nil {
 		panic(err)
 	}
@@ -29,4 +24,7 @@ func main() {
 
 	<-ctx.Done()
 	slog.Info("shutting down server gracefully...")
+	if err := serv.Shutdown(); err != nil {
+		slog.Error("shutdown error", "err", err)
+	}
 }

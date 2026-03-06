@@ -17,8 +17,8 @@ var (
 
 const (
 	syncInterval = time.Millisecond * 5
-	compInterval = time.Minute * 5
-	txChSize     = 32
+	compInterval = storeCompactionInterval
+	txChSize     = storeChannelSize
 )
 
 type transaction struct {

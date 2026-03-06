@@ -62,7 +62,7 @@ func Test_sync(t *testing.T) {
 	_, err = log.file.Seek(0, 0)
 	require.NoError(t, err)
 
-	n, err := log.file.Read(got)
+	n, _ := log.file.Read(got)
 	require.Equal(t, len(line), n)
 	require.Equal(t, line, got)
 }

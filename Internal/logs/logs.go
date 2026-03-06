@@ -23,6 +23,7 @@ const (
 	compInterval = time.Minute * 30
 	writesChSize = 32
 	opChSize     = 32
+	bufferSize   = 1024
 	headerLen    = 4
 	newLine      = "\n"
 	tmpName      = "compaction-*"
@@ -152,7 +153,7 @@ func (l *Log) copyFile() (*os.File, error) {
 		}
 		slog.Error("log/read", "err", err)
 	}
-	buf := bytes.NewBuffer(make([]byte, 1024))
+	buf := bytes.NewBuffer(make([]byte, bufferSize))
 	for key, val := range mem {
 		buf.WriteString(key)
 		buf.Write(val)

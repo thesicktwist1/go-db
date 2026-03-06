@@ -1,8 +1,6 @@
 // Package frame provides data structures and operations for database frames.
 package frame
 
-import "strings"
-
 // Op represents a database operation type.
 type Op uint8
 
@@ -25,26 +23,22 @@ const (
 	OpClosing Op = 7
 )
 
+// opNames maps operations to their string representations.
+var opNames = map[Op]string{
+	OpGet:     "GET",
+	OpDel:     "DELETE",
+	OpSet:     "SET",
+	OpAuth:    "AUTH",
+	OpPing:    "PING",
+	OpPong:    "PONG",
+	OpClosing: "CLOSING",
+}
+
 func (op Op) String() string {
-	b := new(strings.Builder)
-	if op.Has(OpGet) {
-		b.WriteString("GET")
-	} else if op.Has(OpDel) {
-		b.WriteString("DELETE")
-	} else if op.Has(OpSet) {
-		b.WriteString("SET")
-	} else if op.Has(OpAuth) {
-		b.WriteString("AUTH")
-	} else if op.Has(OpPing) {
-		b.WriteString("PING")
-	} else if op.Has(OpPong) {
-		b.WriteString("PONG")
-	} else if op.Has(OpClosing) {
-		b.WriteString("CLOSING")
-	} else {
-		b.WriteString("[INVALID]")
+	if name, ok := opNames[op]; ok {
+		return name
 	}
-	return b.String()
+	return "[INVALID]"
 }
 
 // Has checks if the operation matches the given operation.
