@@ -23,7 +23,6 @@ func main() {
 	go serv.Start(ctx)
 
 	<-ctx.Done()
-	slog.Info("shutting down server gracefully...")
 	if err := serv.Shutdown(); err != nil {
 		slog.Error("shutdown error", "err", err)
 	}

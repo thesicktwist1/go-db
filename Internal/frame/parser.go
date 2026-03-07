@@ -84,6 +84,9 @@ func NewParser() *Parser {
 
 func (p *Parser) Parse(buf []byte) (int, error) {
 	// Validate input buffer
+	if len(buf) > maxFrameSize {
+		return 0, ErrFrameTooLarge
+	}
 	readN := 0
 outerLoop:
 	for {
@@ -150,6 +153,9 @@ outerLoop:
 			size := binary.LittleEndian.Uint32(current[:headerSize])
 			if p.KeyLen > int(size) {
 				return 0, ErrMalformed
+			}
+			if int(size) > maxPayloadSize {
+				return 0, ErrInvalidPayloadLen
 			}
 			if size == 0 {
 				p.State = StateDone

@@ -23,18 +23,18 @@ type peer struct {
 	Processor
 }
 
-// NewPeer creates a new peer with the given processor and connection.
+// NewPeer creates a new peer with the given processer and connection.
 func NewPeer(p Processor, conn Connection) *peer {
 	return &peer{
 		conn:            conn,
-		responseChannel: make(chan []byte, p.ChannelSize()),
+		responseChannel: make(chan []byte, defaultChannelSize),
 		Processor:       p,
 	}
 }
 
 // readLoop continuously reads incoming messages from the connection and processes them.
 func (p *peer) readLoop(ctx context.Context) {
-	buf := make([]byte, p.BufferSize())
+	buf := make([]byte, defaultBufferSize)
 	bufLen := 0
 	parser := frame.NewParser()
 outer:

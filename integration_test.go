@@ -9,6 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// AI generated
+
 func TestClientServerIntegration(t *testing.T) {
 	// Create a temporary directory for the test database
 	tempDir := t.TempDir()
@@ -29,7 +31,7 @@ func TestClientServerIntegration(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	go server.Start(ctx)
@@ -47,7 +49,7 @@ func TestClientServerIntegration(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		testCtx, testCancel := context.WithCancel(context.Background())
+		testCtx, testCancel := context.WithCancel(t.Context())
 		defer testCancel()
 		go testServer.Start(testCtx)
 		time.Sleep(50 * time.Millisecond)
@@ -56,7 +58,7 @@ func TestClientServerIntegration(t *testing.T) {
 		require.NoError(t, err)
 		defer client.cancel() // Clean up client
 
-		ctx := context.Background()
+		ctx := t.Context()
 
 		// Test SET operation
 		err = client.Set(ctx, "testkey", []byte("testvalue"))
@@ -86,7 +88,7 @@ func TestClientServerIntegration(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		testCtx, testCancel := context.WithCancel(context.Background())
+		testCtx, testCancel := context.WithCancel(t.Context())
 		defer testCancel()
 		go testServer.Start(testCtx)
 		time.Sleep(50 * time.Millisecond)
@@ -100,7 +102,7 @@ func TestClientServerIntegration(t *testing.T) {
 		require.NoError(t, err)
 		defer client2.cancel()
 
-		ctx := context.Background()
+		ctx := t.Context()
 
 		// Client 1 sets a value
 		err = client1.Set(ctx, "sharedkey", []byte("client1value"))
@@ -131,7 +133,7 @@ func TestClientServerIntegration(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		testCtx, testCancel := context.WithCancel(context.Background())
+		testCtx, testCancel := context.WithCancel(t.Context())
 		defer testCancel()
 		go testServer.Start(testCtx)
 		time.Sleep(50 * time.Millisecond)
@@ -140,7 +142,7 @@ func TestClientServerIntegration(t *testing.T) {
 		client1, err := NewClient(testAddr3, DefaultClientOpts())
 		require.NoError(t, err)
 
-		err = client1.Set(context.Background(), "persistent", []byte("data"))
+		err = client1.Set(t.Context(), "persistent", []byte("data"))
 		require.NoError(t, err)
 		client1.cancel() // Disconnect first client
 
@@ -151,7 +153,7 @@ func TestClientServerIntegration(t *testing.T) {
 		require.NoError(t, err)
 		defer client2.cancel()
 
-		value, err := client2.Get(context.Background(), "persistent")
+		value, err := client2.Get(t.Context(), "persistent")
 		require.NoError(t, err)
 		require.Equal(t, "data", string(value))
 	})
@@ -175,7 +177,7 @@ func TestClientTimeout(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	go server.Start(ctx)
@@ -192,7 +194,7 @@ func TestClientTimeout(t *testing.T) {
 	}
 
 	// This should either succeed or timeout gracefully
-	ctxTimeout, cancelTimeout := context.WithTimeout(context.Background(), time.Second)
+	ctxTimeout, cancelTimeout := context.WithTimeout(t.Context(), time.Second)
 	defer cancelTimeout()
 
 	err = client.Set(ctxTimeout, "largekey", largeValue)

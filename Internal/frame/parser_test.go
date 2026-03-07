@@ -218,7 +218,7 @@ func Test_FrameSizeValidation(t *testing.T) {
 	parser := NewParser()
 
 	// Test oversized frame
-	oversizedFrame := make([]byte, maxFrameSize+1)
+	oversizedFrame := make([]byte, maxPayloadSize)
 	_, err := parser.Parse(oversizedFrame)
 	require.Error(t, err)
 	require.Equal(t, ErrFrameTooLarge, err)

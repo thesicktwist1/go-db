@@ -40,31 +40,9 @@ type ClientOpts struct {
 	ChannelSize  int // Size of request/response channels
 }
 
-// DefaultClientOpts returns the default client options.
-func DefaultClientOpts() ClientOpts {
-	return ClientOpts{
-		ReadTimeout:  defaultClientReadTimeout,
-		WriteTimeout: defaultClientWriteTimeout,
-		BufferSize:   defaultClientBufferSize,
-		ChannelSize:  defaultClientChannelSize,
-	}
-}
-
 // NewClient creates and starts a new client connected to the given address with the given options.
 func NewClient(address string, opts ClientOpts) (*Client, error) {
-	// Use defaults if timeouts are not set
-	if opts.ReadTimeout == 0 {
-		opts.ReadTimeout = defaultClientReadTimeout
-	}
-	if opts.WriteTimeout == 0 {
-		opts.WriteTimeout = defaultClientWriteTimeout
-	}
-	if opts.BufferSize <= 0 {
-		opts.BufferSize = defaultClientBufferSize
-	}
-	if opts.ChannelSize <= 0 {
-		opts.ChannelSize = defaultClientChannelSize
-	}
+	clientOptsDefaults(&opts)
 	conn, err := net.Dial("tcp", address)
 	if err != nil {
 		return nil, err
@@ -259,6 +237,7 @@ func (c *Client) handleResponse(f frame.Frame) {
 func (c *Client) handleControl(f frame.Frame) {
 	switch f.Op {
 	case frame.OpAuth:
+		// to do
 	case frame.OpClosing:
 		c.cancel()
 	}

@@ -12,7 +12,7 @@ Redis-style in-memory database in Go with persistence and concurrent client supp
 
 ### Technical Features
 - **In-Memory Storage** - Fast access with O(1) hash map operations
-- **Persistence** - Write-ahead logging (WAL) for durability
+- **Persistence** - Append only logging for durability
 - **TCP Communication** - Binary protocol over TCP for efficiency
 - **Concurrent Clients** - Goroutine-based handling of multiple connections
 - **Configurable Timeouts** - Customizable read/write deadlines
@@ -124,7 +124,7 @@ value, err := client.Get(ctx, "key")
          └────────┬────────┘
                   │
          ┌────────▼────────┐
-         │   WAL Log       │
+         │       Log       │
          │ (Persistence)   │
          └─────────────────┘
 ```
@@ -180,7 +180,7 @@ go test -v ./...
 │   │   ├── parser.go    # Frame parsing
 │   │   └── op_test.go   # Operation tests
 │   └── logs/            # Persistence layer
-│       ├── logs.go      # WAL implementation
+│       ├── logs.go      # Append-Only implementation
 │       └── logs_test.go # Log tests
 ├── makefile             # Build commands
 ├── go.mod               # Go module
@@ -194,7 +194,7 @@ go test -v ./...
 3. **Request** - Client sends operation (GET/SET/DELETE) in binary frame format
 4. **Processing** - Server queues transaction, store executes it
 5. **Response** - Result sent back to client
-6. **Persistence** - SET/DELETE operations logged to WAL file
+6. **Persistence** - SET/DELETE operations logged to file
 7. **Cleanup** - Graceful shutdown on signals (SIGTERM, SIGINT)
 
 ## Performance Notes
@@ -202,7 +202,6 @@ go test -v ./...
 - **Latency**: Sub-millisecond for in-memory operations
 - **Throughput**: Limited by network and concurrent request handling
 - **Memory**: In-memory storage grows with data size
-- **Persistence**: Synchronous WAL writes (configurable intervals)
 
 ## Limitations
 
@@ -211,4 +210,4 @@ go test -v ./...
 - No advanced data types (lists, sets, hashes)
 - No pub/sub functionality
 - No authentication/ACL</content>
-<parameter name="filePath">/home/thesicktwist1/workspace/github.com/thesicktwist1/go-db/README.md
+

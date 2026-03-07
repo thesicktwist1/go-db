@@ -26,8 +26,6 @@ type Processor interface {
 type Options interface {
 	ReadTimeout() time.Duration
 	WriteTimeout() time.Duration
-	BufferSize() int
-	ChannelSize() int
 }
 
 // Connection interface defines the contract for network connections.
@@ -42,8 +40,7 @@ type Connection interface {
 type Server struct {
 	Store
 	ServerOpts
-	shutdown chan struct{} // Signals graceful shutdown
-	listener net.Listener  // Active listener for cleanup
+	listener net.Listener // Active listener for cleanup
 }
 
 type ServerOpts struct {
@@ -54,36 +51,9 @@ type ServerOpts struct {
 	channelSize  int           // Size of async operation channels
 }
 
-// NewConfig creates a new server configuration with the given listen address.
-func NewConfig(listenAddr string) ServerOpts {
-	return ServerOpts{
-		ListenAddr:   listenAddr,
-		readTimeout:  defaultReadTimeout,
-		writeTimeout: defaultWriteTimeout,
-		bufferSize:   defaultBufferSize,
-		channelSize:  defaultChannelSize,
-	}
-}
-
-// DefaultServerOpts returns the default server options.
-func DefaultServerOpts() ServerOpts {
-	return ServerOpts{
-		ListenAddr:   defaultServerAddr,
-		readTimeout:  defaultReadTimeout,
-		writeTimeout: defaultWriteTimeout,
-		bufferSize:   defaultBufferSize,
-		channelSize:  defaultChannelSize,
-	}
-}
-
 // NewServer creates a new server with the given database file and options.
 func NewServer(fileName string, opts ServerOpts) (*Server, error) {
-	if opts.bufferSize <= 0 {
-		opts.bufferSize = defaultBufferSize
-	}
-	if opts.channelSize <= 0 {
-		opts.channelSize = defaultChannelSize
-	}
+	serverOptsDefaults(&opts)
 	store, err := NewStore(fileName)
 	if err != nil {
 		return nil, err
@@ -91,7 +61,6 @@ func NewServer(fileName string, opts ServerOpts) (*Server, error) {
 	return &Server{
 		Store:      store,
 		ServerOpts: opts,
-		shutdown:   make(chan struct{}),
 	}, nil
 }
 
@@ -103,7 +72,7 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 	s.listener = listener
 	go s.Store.Run(ctx)
-	slog.Info("server listening on", "addr", listener.Addr().String())
+	slog.Info("server listening on", "addr", s.ListenAddr)
 	return s.acceptLoop(ctx, listener)
 }
 
@@ -111,17 +80,16 @@ func (s *Server) Start(ctx context.Context) error {
 func (s *Server) acceptLoop(ctx context.Context, listener net.Listener) error {
 	for {
 		select {
-		case <-s.shutdown:
+		case <-ctx.Done():
 			slog.Info("server shutting down, stopping accepting connections")
 			return listener.Close()
 		default:
 		}
-
 		conn, err := listener.Accept()
 		if err != nil {
 			// Check if this is due to shutdown
 			select {
-			case <-s.shutdown:
+			case <-ctx.Done():
 				return nil
 			default:
 				slog.Error("listener", "err", err)
@@ -159,7 +127,6 @@ func (s *Server) handleConnection(ctx context.Context, conn Connection) {
 
 	newCtx, cancel := context.WithCancel(ctx)
 	defer func() {
-
 		slog.Info("closing connection", "addr", addr)
 		conn.Write(frame.Closing)
 		conn.Close()
@@ -175,7 +142,7 @@ func handleControl(peer Peer, req frame.Frame) error {
 	var payload []byte
 	switch req.Op {
 	case frame.OpAuth:
-		// auth
+		// todo
 	case frame.OpPing:
 		payload = frame.Pong
 	case frame.OpClosing:
@@ -195,20 +162,25 @@ func (s *Server) WriteTimeout() time.Duration {
 	return s.writeTimeout
 }
 
-// BufferSize returns the buffer size for the server.
-func (s *Server) BufferSize() int {
-	return s.bufferSize
+// DefaultServerOpts returns the default server options.
+func DefaultServerOpts() ServerOpts {
+	return ServerOpts{
+		ListenAddr:   defaultServerAddr,
+		readTimeout:  defaultReadTimeout,
+		writeTimeout: defaultWriteTimeout,
+		bufferSize:   defaultBufferSize,
+		channelSize:  defaultChannelSize,
+	}
 }
 
-// ChannelSize returns the channel size for the server.
-func (s *Server) ChannelSize() int {
-	return s.channelSize
-}
+// Shutdown gracefully stops the server.
 func (s *Server) Shutdown() error {
 	slog.Info("initiating graceful shutdown")
-	close(s.shutdown)
 	if s.listener != nil {
-		return s.listener.Close()
+		if err := s.listener.Close(); err != nil {
+			return err
+		}
 	}
+	slog.Info("graceful shutdown successful")
 	return nil
 }
