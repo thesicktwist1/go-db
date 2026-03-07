@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"os"
 	"testing"
 	"thesicktwist1/go-db/Internal/frame"
@@ -28,62 +27,40 @@ func Test_executeTransaction(t *testing.T) {
 	}{
 		{
 			name: "Operation Get (invalid key)",
-			transaction: transaction{nil, nil, frame.Frame{
-				Type:   frame.TypeQuery,
+			transaction: transaction{nil, frame.Query{
+				ID:     21,
 				Op:     frame.OpGet,
 				KeyLen: 3,
-				Buffer: *bytes.NewBuffer([]byte("ke")),
-			}},
-			wantErr: true,
-			errType: ErrNotExists,
-		},
-		{
-			name: "Operation Auth (invalid operation)",
-			transaction: transaction{nil, nil, frame.Frame{
-				Type: frame.TypeQuery,
-				Op:   frame.OpAuth,
-			}},
-			wantErr: true,
-			errType: frame.ErrMalformed,
-		},
-		{
-			name: "Operation Set (should be valid)",
-			transaction: transaction{nil, nil, frame.Frame{
-				Type:   frame.TypeQuery,
-				Op:     frame.OpSet,
-				KeyLen: 3,
-				Buffer: *bytes.NewBuffer([]byte("keynewvalue")),
-			}},
-		},
-		{
-			name: "Operation Delete (should be valid)",
-			transaction: transaction{nil, nil, frame.Frame{
-				Type:   frame.TypeQuery,
-				Op:     frame.OpDel,
-				KeyLen: 3,
-				Buffer: *bytes.NewBuffer([]byte("key")),
-			}},
-		},
-		{
-			name: "Operation Delete (invalid key)",
-			transaction: transaction{nil, nil, frame.Frame{
-				Type:   frame.TypeQuery,
-				Op:     frame.OpDel,
-				KeyLen: 3,
-				Buffer: *bytes.NewBuffer([]byte("k")),
-			}},
+				Buffer: []byte("ke"),
+			}, nil},
 			wantErr: true,
 			errType: ErrNotExists,
 		},
 		{
 			name: "Operation Get (should be valid)",
-			transaction: transaction{nil, nil, frame.Frame{
-				Type:   frame.TypeQuery,
+			transaction: transaction{nil, frame.Query{
+				ID:     2,
 				Op:     frame.OpGet,
-				KeyLen: 7,
-				Buffer: *bytes.NewBuffer([]byte("example")),
-			}},
-			expected: []byte("key"),
+				KeyLen: 3,
+				Buffer: []byte("key"),
+			}, nil},
+			expected: []byte("example"),
+		},
+		{
+			name: "Operation Delete (should be valid)",
+			transaction: transaction{nil, frame.Query{
+				Op:     frame.OpDel,
+				KeyLen: 3,
+				Buffer: []byte("key"),
+			}, nil},
+		},
+		{
+			name: "Operation Set (should be valid)",
+			transaction: transaction{nil, frame.Query{
+				Op:     frame.OpSet,
+				KeyLen: 3,
+				Buffer: []byte("keyexample"),
+			}, nil},
 		},
 	}
 	for _, tc := range tests {

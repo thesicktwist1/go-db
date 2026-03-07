@@ -1,7 +1,6 @@
 package frame
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 )
@@ -9,8 +8,8 @@ import (
 var (
 	ErrMalformed         = errors.New("error malformed request")
 	ErrInvalidPayloadLen = errors.New("error invalid payload length")
-	ErrFrameTooLarge     = errors.New("frame exceeds maximum allowed size")
-	ErrInvalidFrameType  = errors.New("invalid frame type")
+	ErrFrameTooLarge     = errors.New("Frame exceeds maximum allowed size")
+	ErrInvalidFrameType  = errors.New("invalid Frame type")
 	ErrInvalidOperation  = errors.New("invalid operation")
 	ErrKeyTooLarge       = errors.New("key size exceeds maximum allowed size")
 	ErrValueTooLarge     = errors.New("value size exceeds maximum allowed size")
@@ -26,22 +25,13 @@ const headerSize = 4
 
 // Frame size limits for security and performance
 const (
-	maxFrameSize   = 1024 * 1024 * 10 // 10MB max frame size
+	maxFrameSize   = 1024 * 1024 * 10 // 10MB max Frame size
 	maxKeySize     = 1024 * 64        // 64KB max key size
 	maxValueSize   = 1024 * 1024 * 10 // 10MB max value size
 	maxPayloadSize = maxKeySize + maxValueSize
 )
 
-type Type uint8
 type ParserState uint8
-
-const (
-	TypeDefault Type = 0
-	TypeControl Type = 1
-	TypeQuery   Type = 2
-	TypePayload Type = 3
-	TypeError   Type = 4
-)
 
 const (
 	StateInit              ParserState = 1
@@ -54,31 +44,14 @@ const (
 )
 
 type Parser struct {
-	State ParserState
-	Frame
-}
-
-type Frame struct {
-	Type      Type
-	Id        uint32
-	Op        Op
-	Buffer    bytes.Buffer
-	KeyLen    int
+	state     ParserState
 	available int
-}
-
-func NewFrame() Frame {
-	return Frame{
-		Type:   TypeDefault,
-		Op:     OpDefault,
-		Buffer: *new(bytes.Buffer),
-	}
+	Frame     Frame
 }
 
 func NewParser() *Parser {
 	return &Parser{
-		State: StateInit,
-		Frame: NewFrame(),
+		state: StateInit,
 	}
 }
 
@@ -94,46 +67,47 @@ outerLoop:
 			break
 		}
 		current := buf[readN:]
-		switch p.State {
+		switch p.state {
 		case StateInit:
 			frameType := Type(current[0])
 			if frameType < TypeDefault || frameType > TypeError {
 				return 0, ErrInvalidFrameType
 			}
-			p.Type = frameType
 			readN++
-			switch p.Type {
-			case TypeError, TypePayload:
-				p.State = StateIdParsing
+			p.Frame = NewFrame(frameType)
+			switch frameType {
+			case TypePayload, TypeError:
+				p.state = StateIdParsing
 			default:
-				p.State = StateOpParsing
+				p.state = StateOpParsing
 			}
 		case StateOpParsing:
 			op := Op(current[0])
 			if op > OpClosing {
 				return 0, ErrInvalidOperation
 			}
-			p.Op = op
+			p.Frame.SetOp(op)
 			readN++
-			switch p.Op {
+			switch op {
 			case OpDel, OpGet, OpSet:
-				p.State = StateIdParsing
+				p.state = StateIdParsing
 			case OpAuth:
-				p.State = StatePayloadLenParsing
+				p.state = StatePayloadLenParsing
 			default:
-				p.State = StateDone
+				p.state = StateDone
 			}
 		case StateIdParsing:
 			if len(current) < headerSize {
 				return -1, nil
 			}
-			p.Id = binary.LittleEndian.Uint32(current[:headerSize])
+			id := binary.LittleEndian.Uint32(current[:headerSize])
 			readN += headerSize
-			switch p.Type {
-			case TypeError, TypePayload:
-				p.State = StatePayloadLenParsing
+			p.Frame.SetID(id)
+			switch p.Frame.(type) {
+			case *Error, *Payload:
+				p.state = StatePayloadLenParsing
 			default:
-				p.State = StateKeyLenParsing
+				p.state = StateKeyLenParsing
 			}
 		case StateKeyLenParsing:
 			if len(current) < headerSize {
@@ -143,34 +117,43 @@ outerLoop:
 			if KeyLen > maxKeySize {
 				return 0, ErrKeyTooLarge
 			}
-			p.KeyLen = int(KeyLen)
+			p.Frame.SetKeyLength(KeyLen)
+			p.state = StatePayloadLenParsing
 			readN += headerSize
-			p.State = StatePayloadLenParsing
 		case StatePayloadLenParsing:
 			if len(current) < headerSize {
 				return -1, nil
 			}
 			size := binary.LittleEndian.Uint32(current[:headerSize])
-			if p.KeyLen > int(size) {
-				return 0, ErrMalformed
+			switch q := p.Frame.(type) {
+			case *Query:
+				if q.KeyLen > size {
+					return 0, ErrMalformed
+				}
+				q.Buffer = make([]byte, size)
+			case *Payload:
+				q.Buffer = make([]byte, size)
+			case *Error:
+				q.Buffer = make([]byte, size)
+			default:
 			}
 			if int(size) > maxPayloadSize {
 				return 0, ErrInvalidPayloadLen
 			}
 			if size == 0 {
-				p.State = StateDone
+				p.state = StateDone
 			} else {
-				p.State = StatePayloadParsing
+				p.state = StatePayloadParsing
 			}
 			readN += headerSize
 			p.available = int(size)
 		case StatePayloadParsing:
 			rem := min(len(current), int(p.available))
-			n, _ := p.Buffer.Write(current[:rem])
+			n, _ := p.Frame.Write(current[:rem])
 			p.available -= n
 			readN += n
 			if p.available == 0 {
-				p.State = StateDone
+				p.state = StateDone
 			}
 		case StateDone:
 			break outerLoop
@@ -182,43 +165,11 @@ outerLoop:
 	return readN, nil
 }
 
-func Query(Op Op, id uint32, key string, val []byte) []byte {
-	buf := bytes.NewBuffer([]byte{byte(TypeQuery), byte(Op)})
-	size := len(key) + len(val)
-	binary.Write(buf, binary.LittleEndian, id)
-	binary.Write(buf, binary.LittleEndian, uint32(len(key)))
-	binary.Write(buf, binary.LittleEndian, uint32(size))
-	buf.WriteString(key)
-	buf.Write(val)
-	return buf.Bytes()
-}
-
-func Payload(id uint32, val []byte) []byte {
-	buf := bytes.NewBuffer([]byte{byte(TypePayload)})
-	binary.Write(buf, binary.LittleEndian, id)
-	binary.Write(buf, binary.LittleEndian, uint32(len(val)))
-	buf.Write(val)
-	return buf.Bytes()
-}
-
-func Error(id uint32, err error) []byte {
-	buf := bytes.NewBuffer([]byte{byte(TypeError)})
-	binary.Write(buf, binary.LittleEndian, id)
-	binary.Write(buf, binary.LittleEndian, uint32(len(err.Error())))
-	buf.WriteString(err.Error())
-	return buf.Bytes()
-}
-
 func (p *Parser) Done() bool {
-	return p.State == StateDone
+	return p.state == StateDone
 }
 
 func (p *Parser) Reset() {
-	p.State = StateInit
-
-	p.Frame.Type = TypeDefault
-	p.Frame.Op = OpDefault
-	p.Frame.Buffer.Reset()
-	p.Frame.available = 0
-	p.Frame.KeyLen = 0
+	p.state = StateInit
+	p.available = 0
 }

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -56,9 +55,7 @@ outer:
 			bufLen -= readN
 		}
 		slog.Info("message received from", "peer", p.RemoteAddr())
-		reqCopy := parser.Frame
-		reqCopy.Buffer = *bytes.NewBuffer(parser.Frame.Buffer.Bytes())
-		p.Process(p, reqCopy)
+		p.Process(p, parser.Frame)
 		parser.Reset()
 	}
 }

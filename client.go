@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -65,8 +64,13 @@ func NewClient(address string, opts ClientOpts) (*Client, error) {
 // Get retrieves the value for the given key from the server.
 func (c *Client) Get(ctx context.Context, key string) ([]byte, error) {
 	id := rand.Uint32()
-	request := frame.Query(frame.OpGet, id, key, nil)
-	respCh, err := c.newRequestChannel(id, request)
+	f := &frame.Query{
+		Op:     frame.OpGet,
+		ID:     id,
+		KeyLen: uint32(len(key)),
+		Buffer: []byte(key),
+	}
+	respCh, err := c.newRequestChannel(id, f.Bytes())
 	if err != nil {
 		return nil, err
 	}
@@ -81,8 +85,13 @@ func (c *Client) Get(ctx context.Context, key string) ([]byte, error) {
 // Set sets the value for the given key on the server.
 func (c *Client) Set(ctx context.Context, key string, val []byte) error {
 	id := rand.Uint32()
-	request := frame.Query(frame.OpSet, id, key, val)
-	respCh, err := c.newRequestChannel(id, request)
+	f := &frame.Query{
+		Op:     frame.OpSet,
+		ID:     id,
+		KeyLen: uint32(len(key)),
+		Buffer: append([]byte(key), val...),
+	}
+	respCh, err := c.newRequestChannel(id, f.Bytes())
 	if err != nil {
 		return err
 	}
@@ -97,8 +106,13 @@ func (c *Client) Set(ctx context.Context, key string, val []byte) error {
 // Delete deletes the key from the server.
 func (c *Client) Delete(ctx context.Context, key string) error {
 	id := rand.Uint32()
-	request := frame.Query(frame.OpDel, id, key, nil)
-	respCh, err := c.newRequestChannel(id, request)
+	f := &frame.Query{
+		Op:     frame.OpDel,
+		ID:     id,
+		KeyLen: uint32(len(key)),
+		Buffer: []byte(key),
+	}
+	respCh, err := c.newRequestChannel(id, f.Bytes())
 	if err != nil {
 		return err
 	}
@@ -165,9 +179,7 @@ outer:
 			copy(buf, buf[readN:bufLen])
 			bufLen -= readN
 		}
-		frameCopy := parser.Frame
-		frameCopy.Buffer = *bytes.NewBuffer(parser.Frame.Buffer.Bytes())
-		c.handleResponse(frameCopy)
+		c.handleResponse(parser.Frame)
 		parser.Reset()
 	}
 }
@@ -219,26 +231,25 @@ func (c *Client) sendResponse(id uint32, resp response) {
 }
 
 // handleResponse processes different types of frames received from the server.
-func (c *Client) handleResponse(f frame.Frame) {
+func (c *Client) handleResponse(frm frame.Frame) error {
 	var resp response
-	switch f.Type {
-	case frame.TypePayload:
-		resp.val = f.Buffer.Bytes()
+	switch f := frm.(type) {
+	case *frame.Payload:
+		resp.val = make([]byte, len(f.Buffer))
+		copy(resp.val, f.Buffer)
 		c.sendResponse(f.Id, resp)
-	case frame.TypeError:
-		resp.err = errors.New(f.Buffer.String())
+	case *frame.Error:
+		resp.err = errors.New(string(f.Buffer))
 		c.sendResponse(f.Id, resp)
-	case frame.TypeControl:
-		c.handleControl(f)
+	case *frame.Control:
+		switch f.Op {
+		case frame.OpAuth:
+			// to do
+		case frame.OpClosing:
+			c.cancel()
+		}
+	default:
+		return fmt.Errorf("invalid frame type")
 	}
-}
-
-// handleControl handles control frames from the server.
-func (c *Client) handleControl(f frame.Frame) {
-	switch f.Op {
-	case frame.OpAuth:
-		// to do
-	case frame.OpClosing:
-		c.cancel()
-	}
+	return nil
 }

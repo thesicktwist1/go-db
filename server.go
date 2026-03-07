@@ -18,7 +18,7 @@ var (
 
 // Processor interface defines the contract for processing frames from peers.
 type Processor interface {
-	Process(Peer, frame.Frame)
+	Process(Peer, frame.Frame) error
 	Options
 }
 
@@ -101,22 +101,33 @@ func (s *Server) acceptLoop(ctx context.Context, listener net.Listener) error {
 }
 
 // Process handles incoming frames from a peer by queuing them as transactions or control messages.
-func (s *Server) Process(peer Peer, f frame.Frame) {
-	pid := NewPID(peer.RemoteAddr(), f.Id)
-	switch f.Type {
-	case frame.TypeControl:
-		if err := handleControl(peer, f); err != nil {
-			slog.Error("control", "err", err)
+func (s *Server) Process(peer Peer, frm frame.Frame) error {
+	switch f := frm.(type) {
+	case *frame.Control:
+		var payload []byte
+		switch f.Op {
+		case frame.OpAuth:
+			// todo
+		case frame.OpPing:
+			payload = frame.Pong
+		case frame.OpClosing:
+			peer.Close()
+			return nil
 		}
-	case frame.TypeQuery:
+		return peer.Respond(payload)
+	case *frame.Query:
+		pid := NewPID(peer.RemoteAddr(), f.ID)
 		if err := s.QueueTx(transaction{
-			pid:   pid,
 			peer:  peer,
-			Frame: f,
+			Frame: *f,
+			pid:   pid,
 		}); err != nil {
-			slog.Error("queue", "err", err)
+			return err
 		}
+	default:
+		return errors.New("invalid frame type")
 	}
+	return nil
 }
 
 // handleConnection manages a peer connection, handling read and write operations.
@@ -135,21 +146,6 @@ func (s *Server) handleConnection(ctx context.Context, conn Connection) {
 
 	go peer.readLoop(newCtx)
 	peer.writeLoop(newCtx)
-}
-
-// processControlMessage processes control frames such as auth, ping, and closing.
-func handleControl(peer Peer, req frame.Frame) error {
-	var payload []byte
-	switch req.Op {
-	case frame.OpAuth:
-		// todo
-	case frame.OpPing:
-		payload = frame.Pong
-	case frame.OpClosing:
-		peer.Close()
-		return nil
-	}
-	return peer.Respond(payload)
 }
 
 // ReadTimeout returns the read timeout for the server.

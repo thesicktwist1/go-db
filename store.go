@@ -22,9 +22,9 @@ const (
 )
 
 type transaction struct {
-	pid  *pid
-	peer Peer
-	frame.Frame
+	peer  Peer
+	Frame frame.Query
+	*pid
 }
 
 // Store interface defines the contract for database storage operations.
@@ -61,10 +61,10 @@ loop:
 			slog.Info("processing transaction", "pid", tx.pid)
 			val, err := s.executeTransaction(tx)
 			if err != nil {
-				resp.Write(frame.Error(tx.Id, err))
+				resp.Write(frame.NewError(tx.id, err).Bytes())
 				slog.Error("transaction processing", "err", err, "pid", tx.pid)
 			} else {
-				resp.Write(frame.Payload(tx.Id, val))
+				resp.Write(frame.NewPayload(tx.id, val).Bytes())
 			}
 			payload := make([]byte, resp.Len())
 			resp.Read(payload)
@@ -87,27 +87,27 @@ func (s *store) executeTransaction(tx transaction) ([]byte, error) {
 		value  []byte
 		exists bool
 	)
-	payload := tx.Buffer
-	switch tx.Op {
+	f := tx.Frame
+	switch f.Op {
 	case frame.OpGet:
-		key := payload.String()
-		value, exists = s.mem[key]
+		value, exists = s.mem[string(f.Buffer)]
 		if !exists {
 			return nil, ErrNotExists
 		}
 	case frame.OpDel:
-		_, exists := s.mem[payload.String()]
+		key := string(f.Buffer)
+		_, exists := s.mem[key]
 		if !exists {
 			return nil, ErrNotExists
 		}
-		if err := s.log.Append(payload.Bytes(), tx.KeyLen); err != nil {
+		if err := s.log.Append(f.Buffer, int(f.KeyLen)); err != nil {
 			return nil, err
 		}
-		delete(s.mem, payload.String())
+		delete(s.mem, key)
 	case frame.OpSet:
-		key := tx.Buffer.String()[:tx.KeyLen]
-		newValue := tx.Buffer.Bytes()[tx.KeyLen:]
-		if err := s.log.Append(tx.Buffer.Bytes(), tx.KeyLen); err != nil {
+		key := string(f.Buffer[:f.KeyLen])
+		newValue := f.Buffer[f.KeyLen:]
+		if err := s.log.Append(f.Buffer, int(f.KeyLen)); err != nil {
 			return nil, err
 		}
 		s.mem[key] = newValue

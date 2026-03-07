@@ -1,6 +1,16 @@
 // Package frame provides data structures and operations for database frames.
 package frame
 
+type Type uint8
+
+const (
+	TypeDefault Type = 0
+	TypeControl Type = 1
+	TypeQuery   Type = 2
+	TypePayload Type = 3
+	TypeError   Type = 4
+)
+
 // Op represents a database operation type.
 type Op uint8
 
