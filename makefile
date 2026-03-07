@@ -1,5 +1,3 @@
-.PHONY: test run build clean fmt staticcheck help
-
 # Build the binary
 build:
 	go build -o bin/go-db .

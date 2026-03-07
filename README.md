@@ -166,25 +166,29 @@ go test -v ./...
 ## File Structure
 
 ```
-├── main.go              # Server entry point
-├── client.go            # TCP client implementation
-├── server.go            # TCP server implementation
-├── store.go             # In-memory storage engine
-├── peer.go              # Connection handler
-├── pid.go               # Process ID utilities
-├── integration_test.go  # Client-server integration tests
-├── store_test.go        # Storage operation tests
+
+├── main.go                  # Server entry point
+├── client.go                # TCP client implementation
+├── server.go                # TCP server implementation
+├── store.go                 # In-memory storage engine
+├── peer.go                  # Connection handler
+├── pid.go                   # Process ID utilities
+├── integration_test.go      # Client-server integration tests
+├── store_test.go            # Storage operation tests
 ├── Internal/
-│   ├── frame/           # Protocol implementation
-│   │   ├── op.go        # Operation types
-│   │   ├── parser.go    # Frame parsing
-│   │   └── op_test.go   # Operation tests
-│   └── logs/            # Persistence layer
-│       ├── logs.go      # Append-Only implementation
-│       └── logs_test.go # Log tests
-├── makefile             # Build commands
-├── go.mod               # Go module
-└── README.md            # This file
+│   ├── frame/               # Protocol implementation
+│   │   ├── op.go            # Operation types
+│   │   ├── parser.go        # Frame parsing
+│   │   ├── parser_test.go   # Frame parsing tests
+│   │   ├── frame.go         # Frame structures
+│   │   ├── frame_test.go    # Frame structures tests
+│   │   └── op_test.go       # Operation tests
+│   └── logs/                # Persistence layer
+│       ├── logs.go          # Append-Only implementation
+│       └── logs_test.go     # Log tests
+├── makefile                 # Build commands
+├── go.mod                   # Go module
+└── README.md                # This file
 ```
 
 ## How It Works
