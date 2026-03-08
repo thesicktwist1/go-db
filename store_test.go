@@ -62,6 +62,14 @@ func Test_executeTransaction(t *testing.T) {
 				Buffer: []byte("keyexample"),
 			}, nil},
 		},
+		{
+			name: "Invalid operation",
+			transaction: transaction{nil, frame.Query{
+				Op: frame.OpAuth,
+			}, nil},
+			wantErr: true,
+			errType: frame.ErrMalformed,
+		},
 	}
 	for _, tc := range tests {
 		got, err := store.executeTransaction(tc.transaction)

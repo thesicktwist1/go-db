@@ -38,9 +38,9 @@ type Connection interface {
 
 // Server represents the database server.
 type Server struct {
-	Store
-	ServerOpts
+	store    Store
 	listener net.Listener // Active listener for cleanup
+	ServerOpts
 }
 
 type ServerOpts struct {
@@ -59,7 +59,7 @@ func NewServer(fileName string, opts ServerOpts) (*Server, error) {
 		return nil, err
 	}
 	return &Server{
-		Store:      store,
+		store:      store,
 		ServerOpts: opts,
 	}, nil
 }
@@ -71,7 +71,7 @@ func (s *Server) Start(ctx context.Context) error {
 		return err
 	}
 	s.listener = listener
-	go s.Store.Run(ctx)
+	go s.store.Run(ctx)
 	slog.Info("server listening on", "addr", s.ListenAddr)
 	return s.acceptLoop(ctx, listener)
 }
@@ -117,7 +117,7 @@ func (s *Server) Process(peer Peer, frm frame.Frame) error {
 		return peer.Respond(payload)
 	case *frame.Query:
 		pid := NewPID(peer.RemoteAddr(), f.ID)
-		if err := s.QueueTx(transaction{
+		if err := s.store.Queue(transaction{
 			peer:  peer,
 			Frame: *f,
 			pid:   pid,
@@ -156,17 +156,6 @@ func (s *Server) ReadTimeout() time.Duration {
 // WriteTimeout returns the write timeout for the server.
 func (s *Server) WriteTimeout() time.Duration {
 	return s.writeTimeout
-}
-
-// DefaultServerOpts returns the default server options.
-func DefaultServerOpts() ServerOpts {
-	return ServerOpts{
-		ListenAddr:   defaultServerAddr,
-		readTimeout:  defaultReadTimeout,
-		writeTimeout: defaultWriteTimeout,
-		bufferSize:   defaultBufferSize,
-		channelSize:  defaultChannelSize,
-	}
 }
 
 // Shutdown gracefully stops the server.

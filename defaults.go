@@ -78,3 +78,14 @@ func DefaultClientOpts() ClientOpts {
 		ChannelSize:  defaultChannelSize,
 	}
 }
+
+// DefaultServerOpts returns the default server options.
+func DefaultServerOpts() ServerOpts {
+	return ServerOpts{
+		ListenAddr:   defaultServerAddr,
+		readTimeout:  defaultReadTimeout,
+		writeTimeout: defaultWriteTimeout,
+		bufferSize:   defaultBufferSize,
+		channelSize:  defaultChannelSize,
+	}
+}

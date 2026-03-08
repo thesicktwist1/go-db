@@ -29,7 +29,7 @@ type transaction struct {
 
 // Store interface defines the contract for database storage operations.
 type Store interface {
-	QueueTx(transaction) error
+	Queue(transaction) error
 	Run(context.Context)
 }
 
@@ -41,7 +41,7 @@ type store struct {
 }
 
 // QueueTx queues a transaction for processing.
-func (s *store) QueueTx(tx transaction) error {
+func (s *store) Queue(tx transaction) error {
 	select {
 	case s.txCh <- tx:
 		slog.Info("transaction added to queue", "PID", tx.pid.String())
